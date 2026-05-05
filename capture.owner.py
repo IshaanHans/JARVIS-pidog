@@ -1,6 +1,7 @@
 import cv2
 import os
 import shutil
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 SAVE_DIR = "/home/jarvis/wakeword/known_faces/luke"
 UPLOAD_DIR = "/home/jarvis/uploads"  # change to your upload folder
