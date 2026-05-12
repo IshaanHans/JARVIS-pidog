@@ -1,5 +1,3 @@
-# face.py
-
 import os
 import sys
 import cv2
@@ -7,6 +5,7 @@ import numpy as np
 import face_recognition
 import subprocess
 import threading
+import tempfile
 import time
 import pickle
 import shutil
@@ -26,136 +25,96 @@ ENCODINGS_FILE  = "face_data.pkl"
 TOLERANCE       = 0.55
 FRAME_SCALE     = 0.5
 PROCESS_EVERY_N = 3
-SPEAK_COOLDOWN  = 5       # seconds between repeating the same name
-OWNER_NAME      = "luke"  # triggers owner-specific behaviour
+SPEAK_COOLDOWN  = 5
+OWNER_NAME      = "luke"
+ALSA_DEVICE     = "plughw:2,0"   # Google Voice HAT — card 2 (cards 0/1 are HDMI, silent)
 
+def speak(text):
+    print(f"[FACE] Speaking: {text}")
+
+    if not shutil.which("espeak-ng"):
+        print("[FACE] WARNING: espeak-ng not found. Install: sudo apt install espeak-ng")
+        return
+
+    fd, wav_path = tempfile.mkstemp(suffix='.wav')
+    os.close(fd)
+
+    try:
+        # Generate WAV with espeak-ng
+        gen = subprocess.run(
+            ['espeak-ng', '-w', wav_path,
+             '-a', '200', '-g', '5', '-p', '50', '-s', '130', text],
+            capture_output=True, timeout=15
+        )
+        if gen.returncode != 0:
+            print(f"[FACE] espeak-ng failed: {gen.stderr.decode(errors='ignore').strip()}")
+            return
+
+        # Play through robot_hat Music (enables the amp correctly)
+        from robot_hat import Music
+        music = Music()
+        music.sound_play(wav_path)
+
+    except Exception as e:
+        print(f"[FACE] speak() error: {e}")
+    finally:
+        try:
+            os.unlink(wav_path)
+        except OSError:
+            pass
 # ─────────────────────────────────────────────
 # SPEAK
 # ─────────────────────────────────────────────
 
-def speak(text):
-    print(f"[FACE] Speaking: {text}")
-    if shutil.which("espeak-ng"):
-        try:
-            if shutil.which("aplay"):
-                espeak_proc = subprocess.Popen(
-                    ['espeak-ng', '--stdout', '-a', '200', '-g', '5', '-p', '50', '-s', '130', text],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-                # espeak-ng --stdout emits WAV; aplay must use -t wav or it treats stdin as raw (silent/wrong).
-                aplay_proc = subprocess.Popen(
-                    ['aplay', '-q', '-t', 'wav'],
-                    stdin=espeak_proc.stdout,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-                espeak_proc.stdout.close()
-                _, espeak_err = espeak_proc.communicate()
-                _, aplay_err = aplay_proc.communicate()
-                if espeak_proc.returncode == 0 and aplay_proc.returncode == 0:
-                    return
-                print(f"[FACE] WARNING: espeak/aplay failed (espeak={espeak_proc.returncode}, aplay={aplay_proc.returncode})")
-                if espeak_err:
-                    print(f"[FACE] WARNING: espeak stderr: {espeak_err.decode(errors='ignore').strip()}")
-                if aplay_err:
-                    print(f"[FACE] WARNING: aplay stderr: {aplay_err.decode(errors='ignore').strip()}")
-            result = subprocess.run(
-                ['espeak-ng', '-a', '200', '-g', '5', '-p', '50', '-s', '130', text],
-                check=False
-            )
-            if result.returncode == 0:
-                return
-            print(f"[FACE] WARNING: espeak-ng exited with code {result.returncode}")
-        except Exception as exc:
-            print(f"[FACE] WARNING: espeak-ng failed ({exc})")
-    else:
-        print("[FACE] WARNING: espeak-ng not found, trying pyttsx3 fallback.")
 
-    try:
-        import pyttsx3
-        engine = pyttsx3.init()
-        engine.setProperty("rate", 150)
-        engine.say(text)
-        engine.runAndWait()
-    except Exception as exc:
-        print(f"[FACE] ERROR: TTS fallback failed ({exc})")
-
-# ─────────────────────────────────────────────
-# AUDIO SELF-TEST (helps diagnose “detects but silent”)
 # ─────────────────────────────────────────────
 
 def audio_self_test():
-    """
-    Runs a short audio test and prints actionable diagnostics.
-    Skip with: python3 face.py --no-audio-test
-    """
-    print("[FACE] Audio self-test...")
+    print("[FACE] Running audio self-test...")
+    print(f"[FACE]   Target device : {ALSA_DEVICE}")
+    print(f"[FACE]   espeak-ng     : {'OK' if shutil.which('espeak-ng') else 'NOT FOUND'}")
+    print(f"[FACE]   aplay         : {'OK' if shutil.which('aplay') else 'NOT FOUND'}")
 
-    has_espeak = bool(shutil.which("espeak-ng"))
-    has_aplay  = bool(shutil.which("aplay"))
-
-    if not has_espeak:
-        print("[FACE]  - espeak-ng: NOT FOUND (install: sudo apt install espeak-ng)")
-    else:
-        print("[FACE]  - espeak-ng: OK")
-
-    if not has_aplay:
-        print("[FACE]  - aplay: NOT FOUND (install: sudo apt install alsa-utils)")
-    else:
-        print("[FACE]  - aplay: OK")
-
-    # Best-effort playback test with visible stderr on failure
-    test_text = "Audio test. If you hear this, sound output is working."
-
-    if has_espeak and has_aplay:
-        espeak_proc = subprocess.Popen(
-            ["espeak-ng", "--stdout", test_text],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+    fd, wav_path = tempfile.mkstemp(suffix='.wav')
+    os.close(fd)
+    try:
+        gen = subprocess.run(
+            ['espeak-ng', '-w', wav_path, '-a', '200', '-s', '130',
+             "Audio test. If you hear this, sound is working."],
+            capture_output=True, timeout=15
         )
-        aplay_proc = subprocess.Popen(
-            ["aplay", "-q", "-t", "wav"],
-            stdin=espeak_proc.stdout,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+        if gen.returncode != 0:
+            print(f"[FACE]   espeak-ng write FAILED: {gen.stderr.decode(errors='ignore').strip()}")
+            return False
+
+        play = subprocess.run(
+            ['aplay', '-q', '-D', ALSA_DEVICE, wav_path],
+            capture_output=True, timeout=15
         )
-        espeak_proc.stdout.close()
-        _, espeak_err = espeak_proc.communicate()
-        _, aplay_err = aplay_proc.communicate()
-
-        if espeak_proc.returncode == 0 and aplay_proc.returncode == 0:
-            print("[FACE]  - Playback: OK (espeak-ng -> aplay)")
+        if play.returncode == 0:
+            print("[FACE]   Playback: OK — you should have heard the test phrase.")
             return True
+        else:
+            print(f"[FACE]   Playback FAILED ({play.returncode}): "
+                  f"{play.stderr.decode(errors='ignore').strip()}")
+            print(f"[FACE]   Manual test: espeak-ng -w /tmp/t.wav hello && aplay -D {ALSA_DEVICE} /tmp/t.wav")
+            return False
+    finally:
+        try:
+            os.unlink(wav_path)
+        except OSError:
+            pass
 
-        print(f"[FACE]  - Playback: FAILED (espeak={espeak_proc.returncode}, aplay={aplay_proc.returncode})")
-        if espeak_err:
-            print(f"[FACE]    espeak stderr: {espeak_err.decode(errors='ignore').strip()}")
-        if aplay_err:
-            print(f"[FACE]    aplay stderr: {aplay_err.decode(errors='ignore').strip()}")
-        print("[FACE]    Tip: check volume/mute via `amixer sget Master`")
-        return False
-
-    if has_espeak:
-        result = subprocess.run(["espeak-ng", test_text], check=False)
-        if result.returncode == 0:
-            print("[FACE]  - Playback: attempted via espeak-ng (no aplay available)")
-            return True
-        print(f"[FACE]  - Playback: FAILED (espeak-ng exit={result.returncode})")
-        return False
-
-    print("[FACE]  - Playback: SKIPPED (no TTS backend found)")
-    return False
 
 # ─────────────────────────────────────────────
-# ENCODE — build face_data.pkl from known_faces/
+# ENCODE KNOWN FACES → face_data.pkl
 # ─────────────────────────────────────────────
 
 def encode_known_faces():
     """
-    Supports both layouts:
-      known_faces/luke.jpg          (flat)
-      known_faces/luke/img1.jpg     (folder — recommended for multiple photos)
+    Supports two layouts:
+      known_faces/luke.jpg           (flat — one photo per person)
+      known_faces/luke/img1.jpg      (folder — multiple photos, more accurate)
     """
     known_encodings = {}
     print(f"[FACE] Encoding faces from '{KNOWN_FACES_DIR}'...")
@@ -188,7 +147,7 @@ def encode_known_faces():
                 encodings.append(results[0])
                 print(f"  [+] Encoded: {img_path}")
             else:
-                print(f"  [!] No face found in: {img_path} — skipping")
+                print(f"  [!] No face in: {img_path} — skipping")
 
         if encodings:
             known_encodings[name] = encodings
@@ -198,18 +157,14 @@ def encode_known_faces():
         pickle.dump(known_encodings, f)
 
     total = sum(len(v) for v in known_encodings.values())
-    print(f"\n[FACE] Done. {total} encoding(s) for {len(known_encodings)} person(s) → {ENCODINGS_FILE}")
+    print(f"[FACE] Done. {total} encoding(s) for {len(known_encodings)} person(s) → {ENCODINGS_FILE}")
+
 
 # ─────────────────────────────────────────────
 # LOAD ENCODINGS
 # ─────────────────────────────────────────────
 
 def load_encodings():
-    """
-    Returns flat parallel lists for fast comparison.
-    Falls back to scanning known_faces/ directly if no .pkl exists.
-    """
-    # Try cached pkl first
     if os.path.exists(ENCODINGS_FILE):
         with open(ENCODINGS_FILE, "rb") as f:
             data = pickle.load(f)
@@ -221,8 +176,7 @@ def load_encodings():
         print(f"[FACE] Loaded {len(known_encs)} encoding(s) for: {list(data.keys())}")
         return known_names, known_encs
 
-    # Fallback: load directly from known_faces/ (your original approach)
-    print(f"[FACE] No {ENCODINGS_FILE} found — loading directly from '{KNOWN_FACES_DIR}'...")
+    print(f"[FACE] No {ENCODINGS_FILE} — loading directly from '{KNOWN_FACES_DIR}'...")
     known_names, known_encs = [], []
 
     if not os.path.exists(KNOWN_FACES_DIR):
@@ -243,20 +197,16 @@ def load_encodings():
         else:
             print(f"  [!] No face found in {filename}, skipping")
 
-    print(f"[FACE] Loaded {len(known_names)} face(s) directly from folder.")
+    print(f"[FACE] Loaded {len(known_names)} face(s) from folder.")
     return known_names, known_encs
+
 
 # ─────────────────────────────────────────────
 # IDENTIFY FACES IN A FRAME
 # ─────────────────────────────────────────────
 
 def identify_faces(frame, known_names, known_encs):
-    """
-    Takes an RGB frame (from Picamera2), returns list of dicts:
-      [{"name": "luke", "confidence": 0.87, "location": (top, right, bottom, left)}, ...]
-    """
-    small = cv2.resize(frame, (0, 0), fx=FRAME_SCALE, fy=FRAME_SCALE)
-
+    small     = cv2.resize(frame, (0, 0), fx=FRAME_SCALE, fy=FRAME_SCALE)
     locations = face_recognition.face_locations(small, model="hog")
     encodings = face_recognition.face_encodings(small, locations)
 
@@ -269,14 +219,12 @@ def identify_faces(frame, known_names, known_encs):
             distances = face_recognition.face_distance(known_encs, enc)
             best_idx  = int(np.argmin(distances))
             best_dist = distances[best_idx]
-
             if best_dist <= TOLERANCE:
                 name       = known_names[best_idx]
                 confidence = round(1.0 - float(best_dist), 2)
 
         scale = int(1 / FRAME_SCALE)
         top, right, bottom, left = [v * scale for v in loc]
-
         results.append({
             "name":       name,
             "confidence": confidence,
@@ -285,42 +233,32 @@ def identify_faces(frame, known_names, known_encs):
 
     return results
 
+
 # ─────────────────────────────────────────────
-# OWNER CALLBACKS — plug in your PiDog actions
+# OWNER / FACE CALLBACKS
 # ─────────────────────────────────────────────
 
 def on_owner_detected(confidence):
-    print(f"[FACE] 👋 Owner detected! Confidence: {confidence:.0%}")
+    print(f"[FACE] Owner detected! Confidence: {confidence:.0%}")
     speak(f"Hello {OWNER_NAME}, good to see you")
-    # pidog.do_action("wag_tail", speed=80)
-    # set_mood(MoodState.HAPPY)
 
 def on_owner_lost():
     print("[FACE] Owner left the frame.")
-    # pidog.do_action("sit")
 
 def on_unknown_detected():
-    print("[FACE] ⚠ Unknown face detected.")
+    print("[FACE] Unknown face detected.")
     speak("I see an unknown person")
-    # set_mood(MoodState.CAUTIOUS)
 
 def on_known_detected(name):
     print(f"[FACE] Known person: {name}")
     speak(f"Hello {name}")
 
+
 # ─────────────────────────────────────────────
-# CAMERA THREAD (Picamera2)
+# FACE RECOGNITION THREAD
 # ─────────────────────────────────────────────
 
 class FaceRecognitionThread(threading.Thread):
-    """
-    Daemon thread running Picamera2 capture + face recognition loop.
-
-    Exposes:
-      .current_detections  — latest list of face dicts (thread-safe via get_detections())
-      .owner_present       — True if owner is currently visible
-      .stop()              — graceful shutdown
-    """
 
     def __init__(self, known_names, known_encs):
         super().__init__(daemon=True)
@@ -334,18 +272,21 @@ class FaceRecognitionThread(threading.Thread):
     def stop(self):
         self._stop_event.set()
 
+    def get_detections(self):
+        with self._lock:
+            return list(self.current_detections)
+
     def run(self):
-        # Init Picamera2
         picam2 = Picamera2()
         picam2.configure(picam2.create_preview_configuration(
             main={"format": "RGB888", "size": (640, 480)}
         ))
         picam2.start()
-        print("[FACE] Picamera2 started.")
+        print("[FACE] Camera started.")
 
         frame_count    = 0
         was_owner_here = False
-        last_spoken    = {}   # name -> last spoken timestamp
+        last_spoken    = {}
 
         while not self._stop_event.is_set():
             try:
@@ -356,8 +297,6 @@ class FaceRecognitionThread(threading.Thread):
                 continue
 
             frame_count += 1
-
-            # Only run recognition every Nth frame to reduce CPU load
             if frame_count % PROCESS_EVERY_N != 0:
                 time.sleep(0.01)
                 continue
@@ -371,7 +310,7 @@ class FaceRecognitionThread(threading.Thread):
             owner_now  = OWNER_NAME in names_seen
             now        = time.time()
 
-            # ── Owner state change callbacks ──
+            # Owner enter/leave events
             if owner_now and not was_owner_here:
                 best = max(
                     (d for d in detections if d["name"] == OWNER_NAME),
@@ -385,31 +324,24 @@ class FaceRecognitionThread(threading.Thread):
                 self.owner_present = False
                 on_owner_lost()
 
-            # ── Per-face speak with cooldown ──
+            # Cooldown greetings for all faces
             for d in detections:
                 name      = d["name"]
                 last_time = last_spoken.get(name, 0)
-
                 if now - last_time > SPEAK_COOLDOWN:
                     if name == "Unknown":
                         on_unknown_detected()
                     elif name != OWNER_NAME:
                         on_known_detected(name)
-                    # Owner greeting already handled in state change above
                     last_spoken[name] = now
-
                 print(f"[FACE] {name} ({d['confidence']:.0%}) @ {d['location']}")
 
             was_owner_here = owner_now
             time.sleep(0.01)
 
         picam2.stop()
-        print("[FACE] Camera thread stopped.")
+        print("[FACE] Camera stopped.")
 
-    def get_detections(self):
-        """Thread-safe snapshot of latest detections."""
-        with self._lock:
-            return list(self.current_detections)
 
 # ─────────────────────────────────────────────
 # ENTRYPOINT
@@ -417,7 +349,6 @@ class FaceRecognitionThread(threading.Thread):
 
 if __name__ == "__main__":
 
-    # Encode faces into face_data.pkl
     if "--encode" in sys.argv:
         encode_known_faces()
         sys.exit(0)
@@ -425,17 +356,14 @@ if __name__ == "__main__":
     if "--no-audio-test" not in sys.argv:
         audio_self_test()
 
-    # Load face data
     known_names, known_encs = load_encodings()
     if not known_encs:
         print("[FACE] No faces loaded.")
         print("  → Add photos to known_faces/ and run: python3 face.py --encode")
         sys.exit(1)
 
-    # Start recognition thread
     face_thread = FaceRecognitionThread(known_names, known_encs)
     face_thread.start()
-
     print("[FACE] Running. Press Ctrl+C to stop.\n")
 
     try:
@@ -444,7 +372,7 @@ if __name__ == "__main__":
             detections = face_thread.get_detections()
             if detections:
                 for d in detections:
-                    label = "✓ OWNER" if d["name"] == OWNER_NAME else d["name"]
+                    label = "OWNER" if d["name"] == OWNER_NAME else d["name"]
                     print(f"  → {label} | conf: {d['confidence']:.0%} | loc: {d['location']}")
             else:
                 print("  → No faces in frame")
