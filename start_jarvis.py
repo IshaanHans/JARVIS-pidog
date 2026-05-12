@@ -1,4 +1,4 @@
-# paste #!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 JARVIS Startup Script
 Boots the full JARVIS system: sign language pipeline, face detection, and voice chatbot.
@@ -13,6 +13,7 @@ import time
 import signal
 
 # ── paths (relative to this script's location) ──────────────────────────────
+# script lives at ~/pidog/start_jarvis.py
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EXAMPLES_DIR    = os.path.join(BASE_DIR, "examples")
 SL_PIPELINE_DIR = os.path.join(BASE_DIR, "sl_pipeline")
@@ -34,10 +35,7 @@ def start_process(name, script_path, cwd=None):
     proc = subprocess.Popen(
         [sys.executable, script_path],
         cwd=cwd or os.path.dirname(script_path),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
+        # No PIPE — direct terminal output so STT audio loop isn't buffered
     )
     processes.append((name, proc))
     print(f"[JARVIS] {name} started (PID {proc.pid})")
@@ -86,10 +84,10 @@ if __name__ == "__main__":
     print("=" * 50)
 
     # 1. Start sign language pipeline
-    sl_proc = start_process("SignLanguage", SL_PIPELINE_MAIN, cwd=SL_PIPELINE_DIR)
+    #sl_proc = start_process("SignLanguage", SL_PIPELINE_MAIN, cwd=SL_PIPELINE_DIR)
 
     # Small delay to let SL pipeline initialise before chatbot starts
-    time.sleep(2)
+    #time.sleep(2)
 
     # 2. Start JARVIS voice chatbot (main process — runs in foreground)
     jarvis_proc = start_process("VoiceChatbot", JARVIS_CHATBOT, cwd=EXAMPLES_DIR)

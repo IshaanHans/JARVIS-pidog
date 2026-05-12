@@ -1,38 +1,14 @@
-echo ".cache/" >> .gitignore
-echo "mesa_cache.idx" >> .gitignore
-
-# Python
+cat > ~/pidog/.gitignore << 'EOF'
+.cache/
 __pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-
-# Face recognition data
+*.pyc
+*.pkl
+*.wav
+*.log
+mesa_cache.idx
 face_data.pkl
 known_faces/
-
-# Model/cache files
-*.onnx
-*.tflite
-*.pkl
-*.bin
-*.gguf
-mesa_cache.idx
-.cache/
-
-# Audio
-*.wav
-*.mp3
-
-# Logs
-*.log
-
-# VS Code
 .vscode/
-
-# OS
-.DS_Store
-Thumbs.db
-.cache
+*.onnx
+*.bin
+EOF
