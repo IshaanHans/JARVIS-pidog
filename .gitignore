@@ -1,3 +1,6 @@
+echo ".cache/" >> .gitignore
+echo "mesa_cache.idx" >> .gitignore
+
 # Python
 __pycache__/
 *.py[cod]
@@ -32,3 +35,4 @@ mesa_cache.idx
 # OS
 .DS_Store
 Thumbs.db
+.cache
