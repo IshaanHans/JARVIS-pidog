@@ -29,32 +29,54 @@ SPEAK_COOLDOWN  = 5
 OWNER_NAME      = "luke"
 ALSA_DEVICE     = "plughw:2,0"   # Google Voice HAT — card 2 (cards 0/1 are HDMI, silent)
 
+# ─────────────────────────────────────────────
+# SPEAK
+# ─────────────────────────────────────────────
+
 def speak(text):
+    """
+    Speak text through the Google Voice HAT (card 2).
+    Writes a WAV file via espeak-ng then plays it with aplay
+    explicitly targeting plughw:2,0 so audio never routes to HDMI.
+    """
     print(f"[FACE] Speaking: {text}")
 
     if not shutil.which("espeak-ng"):
         print("[FACE] WARNING: espeak-ng not found. Install: sudo apt install espeak-ng")
         return
 
+    if not shutil.which("aplay"):
+        print("[FACE] WARNING: aplay not found. Install: sudo apt install alsa-utils")
+        return
+
     fd, wav_path = tempfile.mkstemp(suffix='.wav')
     os.close(fd)
 
     try:
-        # Generate WAV with espeak-ng
+        # Step 1: generate WAV
         gen = subprocess.run(
             ['espeak-ng', '-w', wav_path,
              '-a', '200', '-g', '5', '-p', '50', '-s', '130', text],
-            capture_output=True, timeout=15
+            capture_output=True,
+            timeout=15
         )
         if gen.returncode != 0:
-            print(f"[FACE] espeak-ng failed: {gen.stderr.decode(errors='ignore').strip()}")
+            print(f"[FACE] espeak-ng failed ({gen.returncode}): "
+                  f"{gen.stderr.decode(errors='ignore').strip()}")
             return
 
-        # Play through robot_hat Music (enables the amp correctly)
-        from robot_hat import Music
-        music = Music()
-        music.sound_play(wav_path)
+        # Step 2: play WAV to Voice HAT explicitly
+        play = subprocess.run(
+            ['aplay', '-q', '-D', ALSA_DEVICE, wav_path],
+            capture_output=True,
+            timeout=15
+        )
+        if play.returncode != 0:
+            print(f"[FACE] aplay failed ({play.returncode}): "
+                  f"{play.stderr.decode(errors='ignore').strip()}")
 
+    except subprocess.TimeoutExpired:
+        print("[FACE] speak() timed out.")
     except Exception as e:
         print(f"[FACE] speak() error: {e}")
     finally:
@@ -62,11 +84,10 @@ def speak(text):
             os.unlink(wav_path)
         except OSError:
             pass
-# ─────────────────────────────────────────────
-# SPEAK
-# ─────────────────────────────────────────────
 
 
+# ─────────────────────────────────────────────
+# AUDIO SELF-TEST
 # ─────────────────────────────────────────────
 
 def audio_self_test():

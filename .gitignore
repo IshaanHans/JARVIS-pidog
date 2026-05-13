@@ -7,8 +7,10 @@ __pycache__/
 *.log
 mesa_cache.idx
 face_data.pkl
+deploy.prototxt
 known_faces/
 .vscode/
 *.onnx
 *.bin
+.lgd-nfy0
 EOF
