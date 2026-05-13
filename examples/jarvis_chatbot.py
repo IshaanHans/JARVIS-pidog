@@ -3,6 +3,28 @@ import anthropic
 from pidog.dual_touch import TouchStyle
 from voice_active_dog import VoiceActiveDog
 
+# Shared file written by face detection
+LAST_SEEN_FILE = "/tmp/jarvis_last_seen.txt"
+
+def get_last_seen_name():
+    try:
+        if os.path.exists(LAST_SEEN_FILE):
+            with open(LAST_SEEN_FILE, "r") as f:
+                name = f.read().strip()
+            return name if name else None
+    except Exception:
+        pass
+    return None
+
+class JarvisVoiceActiveDog(VoiceActiveDog):
+    def on_wake(self):
+        super().on_wake()
+        name = get_last_seen_name()
+        if name:
+            self.answer_on_wake = f"Hello {name.capitalize()}, how can I help?"
+        else:
+            self.answer_on_wake = "Yes, how can I help sir?"
+
 class ClaudeLLM:
     """Drop-in replacement for SunFounder's Ollama class using Claude API."""
 
@@ -106,7 +128,7 @@ TOO_CLOSE = 10
 LIKE_TOUCH_STYLES = [TouchStyle.FRONT_TO_REAR]
 HATE_TOUCH_STYLES = [TouchStyle.REAR_TO_FRONT]
 
-vad = VoiceActiveDog(
+vad = JarvisVoiceActiveDog(
     llm,
     name=NAME,
     too_close=TOO_CLOSE,
