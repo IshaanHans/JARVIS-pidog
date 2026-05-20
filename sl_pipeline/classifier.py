@@ -7,10 +7,10 @@ from model.signs import INDEX_TO_SIGN
 DEFAULT_MODEL = os.path.expanduser('~/pidog/model/model.pkl')
 
 class SignClassifier:
-    def __init__(self, model_path=DEFAULT_MODEL, confidence_threshold=0.75,
-                 buffer_size=10, confirm_threshold=7, cooldown_frames=20):
+    def __init__(self, model_path=DEFAULT_MODEL, confidence_threshold=0.45,
+                 buffer_size=20, confirm_threshold=8, cooldown_frames=50):
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model not found at {model_path}. Run model/train.py first.")
+            raise FileNotFoundError(f'Model not found at {model_path}. Run model/train.py first.')
         with open(model_path, 'rb') as f:
             self.model = pickle.load(f)
         self.confidence_threshold = confidence_threshold
@@ -19,6 +19,7 @@ class SignClassifier:
         self.cooldown_frames = cooldown_frames
         self._cooldown_counter = 0
         self._last_confirmed = None
+        print(f'[Classifier] Loaded — classes: {list(INDEX_TO_SIGN.values())}')
 
     def predict(self, vector):
         if self._cooldown_counter > 0:

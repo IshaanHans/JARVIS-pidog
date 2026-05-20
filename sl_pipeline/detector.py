@@ -5,13 +5,12 @@ sys.path.append(os.path.expanduser('~/pidog'))
 from utils.landmark_utils import normalise_landmarks
 
 class HandDetector:
-    def __init__(self, model_complexity=0):
+    def __init__(self):
         from ultralytics import YOLO
         from picamera2 import Picamera2
         import time
 
         self.model = YOLO('yolov8n-pose.pt')
-
         self.picam = Picamera2()
         config = self.picam.create_preview_configuration(
             main={"size": (640, 480), "format": "RGB888"})
@@ -27,11 +26,9 @@ class HandDetector:
     def process(self, bgr_frame=None):
         if bgr_frame is None:
             bgr_frame = self.capture_frame()
-
         results = self.model(bgr_frame, imgsz=320, verbose=False)
         annotated = results[0].plot()
         vector = None
-
         if results[0].keypoints is not None:
             kps = results[0].keypoints.data
             if len(kps) > 0:
@@ -40,7 +37,6 @@ class HandDetector:
                 kp[:, 0] /= w
                 kp[:, 1] /= h
                 vector = normalise_landmarks(kp.flatten().astype(np.float32))
-
         return vector, annotated
 
     def close(self):
