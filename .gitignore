@@ -5,9 +5,14 @@ __pycache__/
 *.pkl
 *.wav
 *.log
+*.pt
+*.npz
+*.pkl
 mesa_cache.idx
 face_data.pkl
 deploy.prototxt
+yolov8n-pose.pt 
+training_data.npz
 known_faces/
 .vscode/
 *.onnx
