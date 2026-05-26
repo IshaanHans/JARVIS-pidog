@@ -3,6 +3,8 @@ import base64
 import shutil
 import cv2
 import anthropic
+import time
+import threading
 from pidog.dual_touch import TouchStyle
 from voice_active_dog import VoiceActiveDog
 
@@ -28,6 +30,28 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
             self.answer_on_wake = f"Hello {name.capitalize()}, how can I help?"
         else:
             self.answer_on_wake = "Yes, how can I help sir?"
+    def start_idle_monitor(self):
+        import random
+        self._last_activity = time.time()
+        def idle_loop():
+            while True:
+                time.sleep(30)
+                idle_time = time.time() - self._last_activity
+                if idle_time > 30:
+                    print("[JARVIS] Idle behaviour triggered.")
+                    self.dog.rgb_strip.set_mode('breath', 'pink', 0.5)
+                    idle_actions = ['stretch', 'relax neck', 'shake head', 'nod']
+                    self.action_flow.add_action(random.choice(idle_actions))
+                    self._last_activity = time.time()
+        threading.Thread(target=idle_loop, daemon=True).start()
+
+    def on_start(self):
+        super().on_start()
+        self.start_idle_monitor()
+    
+    def on_heard(self, text):
+        super().on_heard(text)
+        self._last_activity = time.time()
 
     def get_mood(self, text):
         text_lower = text.lower()
