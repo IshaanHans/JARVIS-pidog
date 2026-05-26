@@ -31,7 +31,7 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
 
     def get_mood(self, text):
         text_lower = text.lower()
-        if any(w in text_lower for w in ["sorry", "apologize", "confused", "error", "trouble", "unfortunately"]):
+        if any(w in text_lower for w in ["sorry", "apologize", "confused", "error", "trouble", "unfortunately", "sad", "upset", "unhappy", "disappointed"]):
             return "sad", "blue"
         elif any(w in text_lower for w in ["bark", "back", "away", "stop", "danger", "warning"]):
             return "angry", "red"
@@ -108,6 +108,20 @@ class ClaudeLLM:
         ]
 
     def prompt(self, text, stream=False, think=True, image_path=None, **kwargs):
+        VISION_KEYWORDS = [
+            "see", "look", "what is", "what's", "describe", "show", "camera",
+            "front", "behind", "around", "room", "person", "who", "face",
+            "colour", "color", "read", "sign", "holding", "wearing", "background",
+            "this", "that", "here", "solve", "calculate", "math", "problem", "equation"
+        ]
+        text_lower = text.lower()
+        vision_requested = any(kw in text_lower for kw in VISION_KEYWORDS)
+        # Skip vision for sensor trigger messages (touch/ultrasonic)
+        is_sensor_trigger = text.strip().startswith("<<<")
+        if vision_requested and not is_sensor_trigger and os.path.exists(VISION_SNAPSHOT):
+            image_path = VISION_SNAPSHOT
+        else:
+            image_path = None
         api_messages = list(self.messages)
         api_messages.append({"role": "user", "content": self._vision_content(text, image_path)})
 
@@ -147,7 +161,7 @@ TTS_MODEL = "en_US-ryan-low"
 STT_LANGUAGE = "en-us"
 KEYBOARD_ENABLE = True
 WAKE_ENABLE = True
-WAKE_WORD = ["hey jarvis", "hey travis", "hey davis", "hey harris", "hey jealous", "hey buddy", "jarvis", "buddy"]
+WAKE_WORD = ["hey jarvis", "hey travis", "hey doggy", "hello jarvis", "hey davis", "hey harris", "hey jealous", "hey buddy", "jarvis", "harris", "buddy"]
 ANSWER_ON_WAKE = "Yes, How can I help sir"
 WELCOME = f"Hi, I'm {NAME}. Say hey JARVIS to wake me up."
 
@@ -179,6 +193,16 @@ You don't need to be asked — if you see a clear hand sign, respond to it proac
 
 ## Your Special Ability
 You are a real-time sign language translator. Your camera detects hand gestures and you speak their meaning aloud, acting as a bridge between deaf and hearing people.
+
+## Mood Expression
+Your RGB LED strip changes colour based on keywords in your responses:
+- Use words like "sorry", "unfortunately", "confused" → blue (sad)
+- Use words like "amazing", "fantastic", "wonderful" → yellow (excited)
+- Use words like "hello", "welcome", "pleasure" → green (happy)
+- Use words like "thinking", "curious", "interesting" → cyan (curious)
+- Use words like "stop", "danger", "warning" → red (angry)
+- Default → pink (neutral)
+Naturally use these words when appropriate so your LED reflects your mood.
 
 ## Actions You Can Perform
 forward, backward, lie, stand, sit, bark, bark harder, pant, howling, wag tail, stretch, push up, scratch, handshake, high five, lick hand, shake head, relax neck, nod, think, recall, head down, fluster, surprise
