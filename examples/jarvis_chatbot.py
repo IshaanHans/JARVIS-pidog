@@ -63,10 +63,18 @@ class ClaudeLLM:
         self.system_prompt = instructions
 
     def _vision_content(self, text, image_path):
-        if not image_path or not os.path.isfile(image_path):
+        VISION_KEYWORDS = [
+            "see", "look", "what is", "what's", "describe", "show", "camera",
+            "front", "behind", "around", "room", "person", "who", "face",
+            "colour", "color", "read", "sign", "holding", "wearing", "background", "this", "that", "here", "solve", "calculate", "math", "problem", "equation"
+        ]
+        text_lower = text.lower()
+        vision_requested = any(kw in text_lower for kw in VISION_KEYWORDS)
+        if not vision_requested or not image_path or not os.path.isfile(image_path):
             return text
         with open(image_path, "rb") as f:
             data = base64.standard_b64encode(f.read()).decode("utf-8")
+        print("[JARVIS] Attaching vision snapshot to prompt.")
         return [
             {
                 "type": "image",
@@ -161,7 +169,7 @@ ACTIONS: handshake
 - Always finish sentences completely
 """
 
-TOO_CLOSE = 10
+TOO_CLOSE = 15
 LIKE_TOUCH_STYLES = [TouchStyle.FRONT_TO_REAR]
 HATE_TOUCH_STYLES = [TouchStyle.REAR_TO_FRONT]
 
