@@ -29,6 +29,26 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
         else:
             self.answer_on_wake = "Yes, how can I help sir?"
 
+    def get_mood(self, text):
+        text_lower = text.lower()
+        if any(w in text_lower for w in ["sorry", "apologize", "confused", "error", "trouble", "unfortunately"]):
+            return "sad", "blue"
+        elif any(w in text_lower for w in ["bark", "back", "away", "stop", "danger", "warning"]):
+            return "angry", "red"
+        elif any(w in text_lower for w in ["excited", "amazing", "brilliant", "fantastic", "love", "great", "awesome", "wonderful"]):
+            return "excited", "yellow"
+        elif any(w in text_lower for w in ["hello", "hi", "hey", "welcome", "nice to meet", "pleasure"]):
+            return "happy", "green"
+        elif any(w in text_lower for w in ["thinking", "calculating", "processing", "hmm", "interesting", "curious"]):
+            return "curious", "cyan"
+        else:
+            return "neutral", "pink"
+
+    def before_say(self, text):
+        mood, color = self.get_mood(text)
+        print(f"[JARVIS] Mood: {mood}")
+        self.dog.rgb_strip.set_mode("breath", color, 1)
+
     def init_camera(self):
         """Face detection owns Picamera2; voice reads shared snapshots."""
         self.picam2 = None
