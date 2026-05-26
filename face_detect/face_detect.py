@@ -27,16 +27,22 @@ FRAME_SCALE      = 0.5
 PROCESS_EVERY_N  = 3
 OWNER_NAME       = "luke"
 
-# Shared file so jarvis_chatbot.py can read who was last seen
 LAST_SEEN_FILE   = "/tmp/jarvis_last_seen.txt"
+VISION_SNAPSHOT  = "/tmp/jarvis_vision.jpg"
 
 def write_last_seen(name):
-    """Write the last detected person's name to shared file."""
     try:
         with open(LAST_SEEN_FILE, "w") as f:
             f.write(name)
     except Exception as e:
         print(f"[FACE] Could not write last seen: {e}")
+
+def write_vision_snapshot(frame_rgb):
+    try:
+        bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+        cv2.imwrite(VISION_SNAPSHOT, bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+    except Exception as e:
+        print(f"[FACE] Could not write vision snapshot: {e}")
 
 
 # ─────────────────────────────────────────────
@@ -203,6 +209,10 @@ class FaceRecognitionThread(threading.Thread):
                 continue
 
             frame_count += 1
+
+            # Always write vision snapshot for chatbot
+            write_vision_snapshot(frame)
+
             if frame_count % PROCESS_EVERY_N != 0:
                 time.sleep(0.01)
                 continue
@@ -212,13 +222,12 @@ class FaceRecognitionThread(threading.Thread):
             with self._lock:
                 self.current_detections = detections
 
-            # Write the most confident known face to shared file
             known = [d for d in detections if d["name"] != "Unknown"]
             if known:
                 best = max(known, key=lambda d: d["confidence"])
                 write_last_seen(best["name"])
                 print(f"[FACE] Detected: {best['name']} ({best['confidence']:.0%})")
-            
+
             time.sleep(0.01)
 
         picam2.stop()
@@ -238,7 +247,7 @@ if __name__ == "__main__":
     known_names, known_encs = load_encodings()
     if not known_encs:
         print("[FACE] No faces loaded.")
-        print("  → Add photos to known_faces/ and run: python3 facedetect.py --encode")
+        print("  → Add photos to known_faces/ and run: python3 face_detect.py --encode")
         sys.exit(1)
 
     face_thread = FaceRecognitionThread(known_names, known_encs)

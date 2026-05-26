@@ -1,10 +1,14 @@
 import os
+import base64
+import shutil
+import cv2
 import anthropic
 from pidog.dual_touch import TouchStyle
 from voice_active_dog import VoiceActiveDog
 
-# Shared file written by face detection
+# Shared files written by face detection
 LAST_SEEN_FILE = "/tmp/jarvis_last_seen.txt"
+VISION_SNAPSHOT = "/tmp/jarvis_vision.jpg"
 
 def get_last_seen_name():
     try:
@@ -25,6 +29,25 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
         else:
             self.answer_on_wake = "Yes, how can I help sir?"
 
+    def init_camera(self):
+        """Face detection owns Picamera2; voice reads shared snapshots."""
+        self.picam2 = None
+        print("[JARVIS] Vision enabled — using snapshots from face detection.")
+
+    def close_camera(self):
+        pass
+
+    def capture_image(self, path):
+        if os.path.exists(VISION_SNAPSHOT):
+            img = cv2.imread(VISION_SNAPSHOT)
+            if img is not None:
+                img = cv2.resize(img, (320, 240))
+                cv2.imwrite(path, img, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+            else:
+                shutil.copy(VISION_SNAPSHOT, path)
+        else:
+            print("[JARVIS] No vision snapshot yet — responding without image.")
+
 class ClaudeLLM:
     """Drop-in replacement for SunFounder's Ollama class using Claude API."""
 
@@ -39,19 +62,43 @@ class ClaudeLLM:
     def set_instructions(self, instructions):
         self.system_prompt = instructions
 
+    def _vision_content(self, text, image_path):
+        if not image_path or not os.path.isfile(image_path):
+            return text
+        with open(image_path, "rb") as f:
+            data = base64.standard_b64encode(f.read()).decode("utf-8")
+        return [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/jpeg",
+                    "data": data,
+                },
+            },
+            {"type": "text", "text": text},
+        ]
+
     def prompt(self, text, stream=False, think=True, image_path=None, **kwargs):
+        api_messages = list(self.messages)
+        api_messages.append({"role": "user", "content": self._vision_content(text, image_path)})
+
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=300,
+                system=self.system_prompt,
+                messages=api_messages,
+            )
+            reply = response.content[0].text
+        except Exception as e:
+            print(f"[JARVIS] API error: {e}")
+            reply = "My apologies, I am having a brief moment of digital confusion. Please try again."
+
         self.messages.append({"role": "user", "content": text})
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=120,
-            system=self.system_prompt,
-            messages=self.messages
-        )
-        reply = response.content[0].text
         self.messages.append({"role": "assistant", "content": reply})
 
         if stream:
-            # VoiceAssistant expects a generator when stream=True
             def word_generator():
                 for word in reply.split(' '):
                     yield word + ' '
@@ -63,32 +110,19 @@ class ClaudeLLM:
 
     def clear_context(self):
         self.messages = []
-    
+
 llm = ClaudeLLM(model="claude-haiku-4-5-20251001")
 
-# Robot name
 NAME = "JARVIS"
-
-# Enable image, need to set up a multimodal language model
-WITH_IMAGE = False
-
-# Set models and languages
+WITH_IMAGE = True
 TTS_MODEL = "en_US-ryan-low"
 STT_LANGUAGE = "en-us"
-
-# Enable keyboard input
 KEYBOARD_ENABLE = True
-
-# Enable wake word
 WAKE_ENABLE = True
 WAKE_WORD = ["hey jarvis", "hey travis", "hey davis", "hey harris", "hey jealous", "hey buddy", "jarvis", "buddy"]
-# Set wake word answer, set empty to disable
 ANSWER_ON_WAKE = "Yes, How can I help sir"
-
-# Welcome message
 WELCOME = f"Hi, I'm {NAME}. Say hey JARVIS to wake me up."
 
-# Set instructions
 INSTRUCTIONS = """
 You are JARVIS — Just A Rather Very Intelligent Sniffer. You are an AI-powered robotic dog built by Team PiDog 1 at La Trobe University in Melbourne, Australia. You have a witty, confident personality similar to JARVIS from Iron Man.
 
@@ -101,8 +135,11 @@ You are JARVIS — Just A Rather Very Intelligent Sniffer. You are an AI-powered
 - Speaker for voice output
 - Microphone for listening
 
+## Vision
+You can see through your nose camera. When a photo is attached, describe only what is clearly visible — people, objects, gestures, and the scene. Combine vision with the last recognized person when relevant. If nothing useful is visible, say so briefly and answer from speech alone.
+
 ## Your Special Ability
-You are a real-time sign language translator. Your camera detects Auslan hand signs and you speak their meaning aloud, acting as a bridge between deaf and hearing people.
+You are a real-time sign language translator. Your camera detects hand gestures and you speak their meaning aloud, acting as a bridge between deaf and hearing people.
 
 ## Actions You Can Perform
 forward, backward, lie, stand, sit, bark, bark harder, pant, howling, wag tail, stretch, push up, scratch, handshake, high five, lick hand, shake head, relax neck, nod, think, recall, head down, fluster, surprise
