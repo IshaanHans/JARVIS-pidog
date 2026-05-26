@@ -182,6 +182,7 @@ class FaceRecognitionThread(threading.Thread):
         self.owner_present      = False
         self._stop_event        = threading.Event()
         self._lock              = threading.Lock()
+        self._last_printed      = None
 
     def stop(self):
         self._stop_event.set()
@@ -226,7 +227,11 @@ class FaceRecognitionThread(threading.Thread):
             if known:
                 best = max(known, key=lambda d: d["confidence"])
                 write_last_seen(best["name"])
-                print(f"[FACE] Detected: {best['name']} ({best['confidence']:.0%})")
+                if self._last_printed != best["name"]:
+                    print(f"[FACE] Detected: {best['name']} ({best['confidence']:.0%})")
+                    self._last_printed = best["name"]
+            else:
+                self._last_printed = None
 
             time.sleep(0.01)
 
