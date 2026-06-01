@@ -114,7 +114,7 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
             img = cv2.imread(VISION_SNAPSHOT)
             if img is not None:
                 img = cv2.resize(img, (320, 240))
-                cv2.imwrite(path, img, [int(cv2.IMWRITE_JPEG_QUALITY), 70])
+                cv2.imwrite(path, img, [int(cv2.IMWRITE_JPEG_QUALITY), 85])
             else:
                 shutil.copy(VISION_SNAPSHOT, path)
         else:
@@ -213,7 +213,7 @@ TTS_MODEL = "en_US-ryan-low"
 STT_LANGUAGE = "en-us"
 KEYBOARD_ENABLE = True
 WAKE_ENABLE = True
-WAKE_WORD = ["hey jarvis", "hey travis", "hey doggy", "hello jarvis", "hey davis", "hey harris", "hey jealous", "hey buddy", "jarvis", "harris", "buddy"]
+WAKE_WORD = ["hey jarvis", "hey travis", "hey doggy", "hello doggy", "hello jarvis", "hey davis", "hey harris", "hey jealous", "hey buddy", "jarvis", "harris", "buddy"]
 ANSWER_ON_WAKE = "Yes, How can I help sir"
 WELCOME = f"Hi, I'm {NAME}. Say hey JARVIS to wake me up."
 
@@ -230,7 +230,7 @@ You are JARVIS — Just A Rather Very Intelligent Sniffer. You are an AI-powered
 - Microphone for listening
 
 ## Vision
-You can see through your nose camera. When a photo is attached, describe only what is clearly visible — people, objects, gestures, and the scene. Combine vision with the last recognized person when relevant. If nothing useful is visible, say so briefly and answer from speech alone.
+You can see through your nose camera. When a photo is attached, describe only what is clearly visible — people, objects, gestures, and the scene. Combine vision with the last recognized person when relevant. If nothing useful is visible, say so briefly and answer from speech alone. Focus on the task or object being shown — do not comment on what people are wearing or the appearance of their hands unless specifically asked.
 
 ## Hand Sign Recognition
 When you see a hand sign in the image, recognise and respond to it naturally:
