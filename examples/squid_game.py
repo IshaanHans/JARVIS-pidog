@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from pidog import Pidog
-from pidog.preset_actions import bark_action
+from pidog.preset_actions import bark, bark_action
 from time import sleep
 import cv2
 import numpy as np
@@ -75,8 +75,10 @@ def caught():
     print('[CAUGHT] Motion detected during red light!')
     my_dog.rgb_strip.set_mode(style='bark', color='red', bps=4, brightness=1)
     say('You moved. You are eliminated.')
+    bark(my_dog)
     bark_action(my_dog)
     sleep(0.2)
+    bark(my_dog)
     bark_action(my_dog)
 
 def game_over_win():
