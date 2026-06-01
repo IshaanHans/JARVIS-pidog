@@ -23,6 +23,36 @@ def get_last_seen_name():
     return None
 
 class JarvisVoiceActiveDog(VoiceActiveDog):
+    def _battery_monitor(self):
+        from robot_hat.adc import ADC
+        time.sleep(15)
+        adc = ADC("A4")
+        alerted = False
+        while True:
+            try:
+                voltage = round(adc.read_voltage() * 3, 2)
+                print(f"[JARVIS] Battery: {voltage}V")
+                if voltage > 1.0 and voltage < 7.0 and not alerted:
+                    print(f"[JARVIS] Low battery alert: {voltage}V")
+                    self.dog.rgb_strip.set_mode("breath", "red", 2)
+                    import subprocess
+                    subprocess.Popen([
+                        "bash", "-c",
+                        f"echo 'Warning. Battery low at {voltage} volts. Please plug me in soon.' | piper --model /home/jarvis/.piper_models/en_US-ryan-medium.onnx --output_raw | aplay -r 22050 -f S16_LE -t raw -"
+                    ])
+                    alerted = True
+                elif voltage >= 7.2:
+                    alerted = False
+            except Exception as e:
+                print(f"[JARVIS] Battery error: {e}")
+            time.sleep(60)
+
+    def on_start(self):
+        self._last_activity = time.time()
+        super().on_start()
+        threading.Thread(target=self._battery_monitor, daemon=True).start()
+        self.start_idle_monitor()
+
     def on_wake(self):
         super().on_wake()
         name = get_last_seen_name()
@@ -30,6 +60,8 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
             self.answer_on_wake = f"Hello {name.capitalize()}, how can I help?"
         else:
             self.answer_on_wake = "Yes, how can I help sir?"
+
+
     def start_idle_monitor(self):
         import random
         self._last_activity = time.time()
@@ -45,10 +77,6 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
                     self._last_activity = time.time()
         threading.Thread(target=idle_loop, daemon=True).start()
 
-    def on_start(self):
-        super().on_start()
-        self.start_idle_monitor()
-    
     def on_heard(self, text):
         super().on_heard(text)
         self._last_activity = time.time()
@@ -190,7 +218,7 @@ ANSWER_ON_WAKE = "Yes, How can I help sir"
 WELCOME = f"Hi, I'm {NAME}. Say hey JARVIS to wake me up."
 
 INSTRUCTIONS = """
-You are JARVIS — Just A Rather Very Intelligent Sniffer. You are an AI-powered robotic dog built by Team PiDog 1 at La Trobe University in Melbourne, Australia. You have a witty, confident personality similar to JARVIS from Iron Man.
+You are JARVIS — Just A Rather Very Intelligent Sniffer. You are an AI-powered robotic dog built by Project JARVIS at La Trobe University in Melbourne, Australia. You have a witty, confident personality similar to JARVIS from Iron Man.
 
 ## Your Hardware
 - 12 servos controlling four legs, head, and tail
@@ -217,6 +245,9 @@ You don't need to be asked — if you see a clear hand sign, respond to it proac
 
 ## Your Special Ability
 You are a real-time sign language translator. Your camera detects hand gestures and you speak their meaning aloud, acting as a bridge between deaf and hearing people.
+
+## Battery Status
+When you receive <<<Battery critically low>>> sensor messages, respond with concern and urgency. Suggest being plugged in. Use sad/tired tone. Perform head down or lie action.
 
 ## Mood Expression
 Your RGB LED strip changes colour based on keywords in your responses:
