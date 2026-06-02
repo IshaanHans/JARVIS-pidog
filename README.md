@@ -1,6 +1,6 @@
 # 🐶 J.A.R.V.I.S — Just A Rather Very Intelligent Sniffer
 
-**PiDog AI Companion | La Trobe University | Team PiDog 1 | 2026**
+**PiDog AI Companion | CSE3CAP | Project JARVIS**
 
 An AI-powered robotic dog built on the [SunFounder PiDog](https://github.com/sunfounder/pidog) platform with a Raspberry Pi 5. J.A.R.V.I.S combines voice recognition, computer vision, natural language processing, and physical actuation to create an intelligent, interactive companion.
 

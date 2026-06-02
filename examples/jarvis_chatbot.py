@@ -69,7 +69,7 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
             while True:
                 time.sleep(30)
                 idle_time = time.time() - self._last_activity
-                if idle_time > 30:
+                if idle_time > 60:
                     print("[JARVIS] Idle behaviour triggered.")
                     self.dog.rgb_strip.set_mode('breath', 'pink', 0.5)
                     idle_actions = ['stretch', 'relax neck', 'shake head', 'nod']
