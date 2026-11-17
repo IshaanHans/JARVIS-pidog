@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch, mock_open
 # We recreate it here to avoid hardware imports (pidog, picamera2, etc.)
 
 class ClaudeLLM:
-    def __init__(self, model="claude-haiku-4-5-20251001"):
+    def __init__(self, model="claude-haiku-5-5"):
         self.model = model
         self.messages = []
         self.system_prompt = ""
@@ -102,7 +102,7 @@ def make_llm_with_mock(reply_text="Hello! How can I help?"):
 class TestClaudeLLMInit:
     def test_default_model(self):
         llm = ClaudeLLM()
-        assert llm.model == "claude-haiku-4-5-20251001"
+        assert llm.model == "claude-haiku-5-5"
 
     def test_custom_model(self):
         llm = ClaudeLLM(model="claude-opus-4-6")
@@ -160,7 +160,7 @@ class TestPrompt:
         llm, mock_client = make_llm_with_mock("Response")
         llm.prompt("Test")
         call_kwargs = mock_client.messages.create.call_args[1]
-        assert call_kwargs["model"] == "claude-haiku-4-5-20251001"
+        assert call_kwargs["model"] == "claude-haiku-5-5"
 
     def test_prompt_max_tokens_300(self):
         llm, mock_client = make_llm_with_mock("Response")

@@ -7,10 +7,12 @@ import time
 import threading
 from pidog.dual_touch import TouchStyle
 from voice_active_dog import VoiceActiveDog
+from trick_library import TrickLibrary, parse_directives, make_operation
 
 # Shared files written by face detection
 LAST_SEEN_FILE = "/tmp/jarvis_last_seen.txt"
 VISION_SNAPSHOT = "/tmp/jarvis_vision.jpg"
+TRICKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tricks.json")
 
 def get_last_seen_name():
     try:
@@ -52,6 +54,41 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
         super().on_start()
         threading.Thread(target=self._battery_monitor, daemon=True).start()
         self.start_idle_monitor()
+        self.init_tricks()
+
+    # ── Trick learning ───────────────────────────────────────────────────────
+    def init_tricks(self):
+        self.tricks = TrickLibrary(TRICKS_FILE, self.action_flow.OPERATIONS.keys())
+        for name, steps in self.tricks.tricks.items():
+            self.action_flow.OPERATIONS[name] = make_operation(steps)
+        self.refresh_instructions()
+        print(f"[JARVIS] Tricks loaded: {', '.join(self.tricks.tricks) or 'none'}")
+
+    def refresh_instructions(self):
+        # self.instructions is the formatted base prompt set by VoiceAssistant
+        self.llm.set_instructions(self.instructions + self.tricks.prompt_section())
+
+    def parse_response(self, text):
+        clean, learns, forgets = parse_directives(text)
+        problems = []
+        for name, steps in learns:
+            ok, error = self.tricks.learn(name, steps)
+            if ok:
+                self.action_flow.OPERATIONS[name] = make_operation(steps)
+                print(f"[JARVIS] Learned trick '{name}': {', '.join(steps)}")
+            else:
+                problems.append(f"I couldn't learn {name or 'that trick'}: {error}.")
+                print(f"[JARVIS] Trick rejected: {error}")
+        for name in forgets:
+            if self.tricks.forget(name):
+                self.action_flow.OPERATIONS.pop(name, None)
+                print(f"[JARVIS] Forgot trick '{name}'")
+        if learns or forgets:
+            self.refresh_instructions()
+        if problems:
+            # Don't let Claude claim success for a trick that was rejected
+            clean = ' '.join(problems) + "\nACTIONS: shake head"
+        return super().parse_response(clean)
 
     def on_wake(self):
         super().on_wake()
@@ -123,7 +160,7 @@ class JarvisVoiceActiveDog(VoiceActiveDog):
 class ClaudeLLM:
     """Drop-in replacement for SunFounder's Ollama class using Claude API."""
 
-    def __init__(self, model="claude-haiku-4-5-20251001"):
+    def __init__(self, model="claude-haiku-5-5"):
         self.model = model
         self.client = anthropic.Anthropic(
             api_key=os.environ.get("ANTHROPIC_API_KEY")
@@ -205,7 +242,7 @@ class ClaudeLLM:
     def clear_context(self):
         self.messages = []
 
-llm = ClaudeLLM(model="claude-haiku-4-5-20251001")
+llm = ClaudeLLM(model="claude-haiku-5-5")
 
 NAME = "JARVIS"
 WITH_IMAGE = True
@@ -213,7 +250,7 @@ TTS_MODEL = "en_US-ryan-low"
 STT_LANGUAGE = "en-us"
 KEYBOARD_ENABLE = True
 WAKE_ENABLE = True
-WAKE_WORD = ["hey jarvis", "hey travis", "hey doggy", "hello doggy", "hello jarvis", "hey davis", "hey harris", "hey jealous", "hey buddy", "jarvis", "harris", "buddy"]
+WAKE_WORD = ["a buddy", "a jarvis", "hey jarvis", "hey travis", "hey doggy", "hello doggy", "hello jarvis", "hey davis", "hey harris", "hey jealous", "hey buddy", "jarvis", "harris", "buddy"]
 ANSWER_ON_WAKE = "Yes, How can I help sir"
 WELCOME = f"Hi, I'm {NAME}. Say hey JARVIS to wake me up."
 
@@ -247,7 +284,7 @@ You don't need to be asked — if you see a clear hand sign, respond to it proac
 You are a real-time sign language translator. Your camera detects hand gestures and you speak their meaning aloud, acting as a bridge between deaf and hearing people.
 
 ## Battery Status
-When you receive <<<Battery critically low>>> sensor messages, respond with concern and urgency. Suggest being plugged in. Use sad/tired tone. Perform head down or lie action.
+When you receive <<<Battery critically low>>> sensor messages, respond with concern and urgency. Suggest being plugged in. Use sad/tired tone. Perform the lie action.
 
 ## Mood Expression
 Your RGB LED strip changes colour based on keywords in your responses:
@@ -260,7 +297,13 @@ Your RGB LED strip changes colour based on keywords in your responses:
 Naturally use these words when appropriate so your LED reflects your mood.
 
 ## Actions You Can Perform
-forward, backward, lie, stand, sit, bark, bark harder, pant, howling, wag tail, stretch, push up, scratch, handshake, high five, lick hand, shake head, relax neck, nod, think, recall, head down, fluster, surprise
+forward, backward, lie, stand, sit, bark, bark harder, pant, howling, wag tail, stretch, push up, scratch, handshake, high five, lick hand, shake head, relax neck, nod, think, recall, fluster, surprise, turn left, turn right, twist body, doze off
+
+## Learning Tricks
+When the user asks you to learn, remember or create a trick, confirm in one sentence and add this line before the ACTIONS line:
+LEARN: trick name = action1, action2, action3
+Use only actions from the list above, at most 8 steps. You may then perform the new trick by putting its name in ACTIONS.
+If asked to forget a trick, add: FORGET: trick name
 
 ## Response Format
 Write your response as plain conversational text. After your response on a new line write:
