@@ -220,8 +220,11 @@ class ClaudeLLM:
                 max_tokens=300,
                 system=self.system_prompt,
                 messages=api_messages,
+                thinking={"type": "disabled"},  # Haiku 5.5 thinks by default; off for voice latency
             )
-            reply = response.content[0].text
+            reply = "".join(b.text for b in response.content if b.type == "text").strip()
+            if not reply:
+                raise ValueError("no text in response")
         except Exception as e:
             print(f"[JARVIS] API error: {e}")
             reply = "My apologies, I am having a brief moment of digital confusion. Please try again."
